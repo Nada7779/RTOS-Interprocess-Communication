@@ -85,6 +85,10 @@ SemaphoreHandle_t uart_free;
 #define STRING_SIZE   20
 #define TASK_1_CYCLE  100
 #define TASK_2_CYCLE  500
+#define LOOP_INIT      0
+#define LOOP_MAX      10
+#define TASK_DELAY    10
+#define HEAVY_LOOP_MAX  100000
 
 /*
  * Configure the processor for use with the Keil demo board.  This is very
@@ -100,48 +104,48 @@ static void prvSetupHardware( void );
 
 /* TaskS to be created */
 
-/* Task to read button in port0 pin 0 each 10ms */
+/* Task to send string to uart each 100ms */
 void TASK_1 (void * pvParameters)
 {
 	const int8_t lc_ch_task_1_string[] = "Hello From Task 1\n";
 		
-  uint8_t lc_u8_task1_loop=0;
+  uint8_t lc_u8_task1_loop=LOOP_INIT;
 xSemaphoreGive(uart_free) ;
 	for( ;; )
 	{
 /* Task Code*/
 		 if( xSemaphoreTake( uart_free,portMAX_DELAY) == pdTRUE )
 		 {
-		for (lc_u8_task1_loop=0;lc_u8_task1_loop<10;lc_u8_task1_loop++)
+		for (lc_u8_task1_loop=LOOP_INIT;lc_u8_task1_loop<LOOP_MAX ;lc_u8_task1_loop++)
 		{
 		vSerialPutString(lc_ch_task_1_string,STRING_SIZE);
-			vTaskDelay(10);
+			vTaskDelay(TASK_DELAY);
 		}
 		xSemaphoreGive(uart_free) ;
-		vTaskDelay(TASK_1_CYCLE);
+		vTaskDelay(TASK_DELAY);
 		
 	}
 	}
 }
 
-/* Task to toggle  led in port0 pin 18 according to button pressing*/
+/* Task to send string to uart each 500ms */
 
 void TASK_2 (void * pvParameters)
 {
 	const int8_t lc_ch_task_2_string[] = "Hello From Task 2\n";
 		
-  uint8_t lc_u8_task2_loop=0;
-	uint32_t lc_u32_heavy_load=0;
+  uint8_t lc_u8_task2_loop=LOOP_INIT;
+	uint32_t lc_u32_heavy_load=LOOP_INIT;
 	
 	for( ;; )
 	{
 /* Task Code*/
 		if( xSemaphoreTake( uart_free,portMAX_DELAY ) == pdTRUE )
 		 {
-		for (lc_u8_task2_loop=0;lc_u8_task2_loop<10;lc_u8_task2_loop++)
+		for (lc_u8_task2_loop=LOOP_INIT;lc_u8_task2_loop<LOOP_MAX;lc_u8_task2_loop++)
 		{
 		vSerialPutString(lc_ch_task_2_string,STRING_SIZE);
-			for (lc_u32_heavy_load=0;lc_u32_heavy_load<100000;lc_u32_heavy_load++){;}
+			for (lc_u32_heavy_load=LOOP_INIT;lc_u32_heavy_load<HEAVY_LOOP_MAX;lc_u32_heavy_load++){;}
 		}
 		xSemaphoreGive(uart_free) ;
 		vTaskDelay(TASK_2_CYCLE);
@@ -163,7 +167,7 @@ int main( void )
 	
     /* Create Tasks here */
 	
-/* create BUTTON_TASK */
+/* create TASK_1 */
 	xTaskCreate(
                TASK_1,                 /* function that implements the task */
 	             "TASK_1",                /* task's name */
@@ -172,7 +176,7 @@ int main( void )
 		           1,                      /* task's priority */
 		           &TASK_1_Handler    /* task's handler */
 );
- /* create LED_TASK */  
+ /* create TASK_2 */  
 	xTaskCreate(
                TASK_2,                 /* function that implements the task */
 	             "TASK_2",                /* task's name */
