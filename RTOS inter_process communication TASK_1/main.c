@@ -93,7 +93,12 @@ static void prvSetupHardware( void );
 /*-----------------------------------------------------------*/
 
  /* Global Variables */
-//uint8_t u8_button_released;
+
+/* pre_defines */
+#define PRESSED   1
+#define RELEASED  0
+#define TASK_DELAY 10
+#define  TICK_ZERO  0
 
 
 /* TaskS to be created */
@@ -102,7 +107,7 @@ static void prvSetupHardware( void );
 void BUTTON_TASK (void * pvParameters)
 {
 	/* local variables */
-	uint8_t lc_u8_button_pressed=0;
+	uint8_t lc_u8_button_pressed=RELEASED;
 	pinState_t lc_u8_button_state;
 
 	for( ;; )
@@ -112,15 +117,15 @@ void BUTTON_TASK (void * pvParameters)
 				if (lc_u8_button_state == PIN_IS_HIGH )
 				{
 					 
-					lc_u8_button_pressed=1;
+					lc_u8_button_pressed=PRESSED;
 				}
-				else if (lc_u8_button_state == PIN_IS_LOW && lc_u8_button_pressed==1)
+				else if (lc_u8_button_state == PIN_IS_LOW && lc_u8_button_pressed==PRESSED)
 				{
 					xSemaphoreGive(button_released) ;
-           lc_u8_button_pressed=0;
+           lc_u8_button_pressed=RELEASED;
 				}				
 		
-		vTaskDelay(10);	
+		vTaskDelay(TASK_DELAY);	
 	}
 }
 
@@ -130,11 +135,11 @@ void LED_TASK (void * pvParameters)
 {
 	for( ;; )
 	{
-     if( xSemaphoreTake( button_released,( TickType_t) 0 ) == pdTRUE )
+     if( xSemaphoreTake( button_released,( TickType_t) TICK_ZERO ) == pdTRUE )
         {
           GPIO_toggle(PORT_0,PIN2);
         }
-				vTaskDelay(10);	
+				vTaskDelay(TASK_DELAY);	
 	}
 }
 
