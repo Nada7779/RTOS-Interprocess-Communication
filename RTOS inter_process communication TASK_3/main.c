@@ -61,6 +61,8 @@
 #include "task.h"
 #include "lpc21xx.h"
 #include "semphr.h"
+#include "queue.h"
+
 
 /* Peripheral includes. */
 #include "serial.h"
@@ -76,15 +78,20 @@
 #define mainCOM_TEST_BAUD_RATE	( ( unsigned long ) 115200 )
 
 /* Tasks Hnadlers*/
-TaskHandle_t TASK_1_Handler = NULL; 
-TaskHandle_t TASK_2_Handler = NULL; 
+TaskHandle_t Button_1_Task_Handler = NULL; 
+TaskHandle_t Button_2_Task_Handler = NULL; 
+TaskHandle_t Send_String_Task_Handler = NULL;
+TaskHandle_t Consumer_Task_Handler = NULL;
 
 /* Semaphore object */
-SemaphoreHandle_t uart_free;
+SemaphoreHandle_t button_released;
 
-#define STRING_SIZE   20
-#define TASK_1_CYCLE  100
-#define TASK_2_CYCLE  500
+/* Queue object */
+xQueueHandle gl_queue_handle;
+
+
+
+
 
 /*
  * Configure the processor for use with the Keil demo board.  This is very
@@ -95,58 +102,108 @@ static void prvSetupHardware( void );
 /*-----------------------------------------------------------*/
 
  /* Global Variables */
-//uint8_t u8_button_released;
+ uint8_t string_size;
+ 
+ /* PRE_DEFINES */
+#define QUEUE_MAX           10
+#define CONSUMER_DELAY      10
+#define STRING_SIZE         17
+#define SEND_DELAY          100
+#define READ_BUTTON_DELAY   10
+#define PRESSED             1
+#define RELEASED            0
+#define  BUTTON_1_PORT  PORT_0
+#define  BUTTON_2_PORT  PORT_0
+#define  BUTTON_1_PIN   PIN0
+#define  BUTTON_2_PIN   PIN1
+
 
 
 /* TaskS to be created */
 
-/* Task to read button in port0 pin 0 each 10ms */
-void TASK_1 (void * pvParameters)
+/* BUTTON_1_TASK  to detect the button 1 on (port 0 pin0) rising and falling edges  Every edge is an event that will be sent to a consumer_task */
+void BUTTON_1_TASK (void * pvParameters)
 {
-	const int8_t lc_ch_task_1_string[] = "Hello From Task 1\n";
-		
-  uint8_t lc_u8_task1_loop=0;
-xSemaphoreGive(uart_free) ;
-	for( ;; )
-	{
-/* Task Code*/
-		 if( xSemaphoreTake( uart_free,portMAX_DELAY) == pdTRUE )
-		 {
-		for (lc_u8_task1_loop=0;lc_u8_task1_loop<10;lc_u8_task1_loop++)
-		{
-		vSerialPutString(lc_ch_task_1_string,STRING_SIZE);
-			vTaskDelay(10);
-		}
-		xSemaphoreGive(uart_free) ;
-		vTaskDelay(TASK_1_CYCLE);
-		
-	}
-	}
-}
+	/* local variables */
+	uint8_t lc_u8_button_pressed=RELEASED;
 
-/* Task to toggle  led in port0 pin 18 according to button pressing*/
-
-void TASK_2 (void * pvParameters)
-{
-	const int8_t lc_ch_task_2_string[] = "Hello From Task 2\n";
-		
-  uint8_t lc_u8_task2_loop=0;
-	uint32_t lc_u32_heavy_load=0;
+	pinState_t lc_u8_button_state;
+	
+	const char* lc_ptr_ch_button_1_rising= "Button_1_RISING \n";
+	const char* lc_ptr_ch_button_1_falling= "Button_1_FALLING\n";
 	
 	for( ;; )
 	{
 /* Task Code*/
-		if( xSemaphoreTake( uart_free,portMAX_DELAY ) == pdTRUE )
-		 {
-		for (lc_u8_task2_loop=0;lc_u8_task2_loop<10;lc_u8_task2_loop++)
-		{
-		vSerialPutString(lc_ch_task_2_string,STRING_SIZE);
-			for (lc_u32_heavy_load=0;lc_u32_heavy_load<100000;lc_u32_heavy_load++){;}
-		}
-		xSemaphoreGive(uart_free) ;
-		vTaskDelay(TASK_2_CYCLE);
-		
+		lc_u8_button_state= GPIO_read(BUTTON_2_PORT, BUTTON_2_PIN);
+				if (lc_u8_button_state == PIN_IS_HIGH && lc_u8_button_pressed==RELEASED )
+				{ 
+				  xQueueSend(gl_queue_handle,&lc_ptr_ch_button_1_rising,portMAX_DELAY);
+					
+					lc_u8_button_pressed=PRESSED;
+				}
+				else if (lc_u8_button_state == PIN_IS_LOW && lc_u8_button_pressed==PRESSED)
+				{
+					xQueueSend(gl_queue_handle,&lc_ptr_ch_button_1_falling,portMAX_DELAY);
+					
+           lc_u8_button_pressed=RELEASED;
+				}				
+		vTaskDelay(READ_BUTTON_DELAY);	
 	}
+}
+/* BUTTON_2_TASK  to detect the button 1 on (port 0 pin1) rising and falling edges  Every edge is an event that will be sent to a consumer_task */
+void BUTTON_2_TASK (void * pvParameters)
+{
+	/* local variables */
+	uint8_t lc_u8_button_pressed=RELEASED;
+
+	pinState_t lc_u8_button_state;
+	
+	const char* lc_ptr_ch_button_1_rising= "Button_2_RISING \n";
+	const char* lc_ptr_ch_button_1_falling= "Button_2_FALLING\n";
+	
+	for( ;; )
+	{
+/* Task Code*/
+		lc_u8_button_state= GPIO_read(BUTTON_1_PORT, BUTTON_1_PIN);
+				if (lc_u8_button_state == PIN_IS_HIGH && lc_u8_button_pressed==RELEASED )
+				{ 
+				  xQueueSend(gl_queue_handle,&lc_ptr_ch_button_1_rising,portMAX_DELAY);
+						
+					lc_u8_button_pressed=PRESSED;
+				}
+				else if (lc_u8_button_state == PIN_IS_LOW && lc_u8_button_pressed==PRESSED)
+				{
+					xQueueSend(gl_queue_handle,&lc_ptr_ch_button_1_falling,portMAX_DELAY);
+					
+           lc_u8_button_pressed=RELEASED;
+				}				
+		vTaskDelay(READ_BUTTON_DELAY);	
+	}
+}
+/* This task will send a periodic string  every 100ms to the consumer task */
+void Send_String_Task (void * pvParameters)
+{	
+	const char* lc_ptr_ch_send_string= "periodic string \n";
+	for( ;; )
+	{
+	
+      xQueueSend(gl_queue_handle,&lc_ptr_ch_send_string,portMAX_DELAY);
+
+		vTaskDelay(SEND_DELAY);
+	}
+}
+/* This task will send the strings recieved from buttons and send tasks to the uart */
+void Consumer_Task (void * pvParameters)
+{	
+	const char* lc_ptr_ch_receive_string;
+	for( ;; )
+	{
+     xQueueReceive(gl_queue_handle,&lc_ptr_ch_receive_string,portMAX_DELAY);
+		
+		vSerialPutString((const signed char*)lc_ptr_ch_receive_string,STRING_SIZE);
+		
+		vTaskDelay(CONSUMER_DELAY);	
 	}
 }
 
@@ -158,28 +215,48 @@ int main( void )
 {
 	/* Setup the hardware for use with the Keil demo board. */
 	prvSetupHardware();
-  /* Attempt to create a semaphore */
-	uart_free = xSemaphoreCreateBinary();
+ 
+	/* Create queue */
+	gl_queue_handle = xQueueCreate(QUEUE_MAX, sizeof(const char*));
+	
 	
     /* Create Tasks here */
-	
-/* create BUTTON_TASK */
+
+/* create BUTTON_1_TASK */
 	xTaskCreate(
-               TASK_1,                 /* function that implements the task */
-	             "TASK_1",                /* task's name */
+               BUTTON_1_TASK,                 /* function that implements the task */
+	             "BUTTON_1_TASK",                /* task's name */
 	             configMINIMAL_STACK_SIZE, /* stack size in words */
 	             (void *) NULL,           /* parameter passed to the task */
 		           1,                      /* task's priority */
-		           &TASK_1_Handler    /* task's handler */
+		           &Button_1_Task_Handler    /* task's handler */
 );
- /* create LED_TASK */  
+/* create BUTTON_2_TASK */
 	xTaskCreate(
-               TASK_2,                 /* function that implements the task */
-	             "TASK_2",                /* task's name */
+               BUTTON_2_TASK,                 /* function that implements the task */
+	             "Button_2_Task",                /* task's name */
 	             configMINIMAL_STACK_SIZE, /* stack size in words */
 	             (void *) NULL,           /* parameter passed to the task */
-		           2,                      /* task's priority */
-		           &TASK_2_Handler    /* task's handler */
+		           1,                      /* task's priority */
+		           &Button_2_Task_Handler    /* task's handler */
+);
+/* create Send_String_Task */
+	xTaskCreate(
+               Send_String_Task,                 /* function that implements the task */
+	             "Send_String_Task",                /* task's name */
+	             configMINIMAL_STACK_SIZE, /* stack size in words */
+	             (void *) NULL,           /* parameter passed to the task */
+		           1,                      /* task's priority */
+		           &Send_String_Task_Handler    /* task's handler */
+);
+/* create Consumer_Task */  
+	xTaskCreate(
+               Consumer_Task,                 /* function that implements the task */
+	             "Consumer_Task",                /* task's name */
+	             configMINIMAL_STACK_SIZE, /* stack size in words */
+	             (void *) NULL,           /* parameter passed to the task */
+		           1,                      /* task's priority */
+		           &Consumer_Task_Handler    /* task's handler */
 );
 						 
 /**************************************************************************************************/
@@ -231,13 +308,3 @@ static void prvSetupHardware( void )
 	VPBDIV = mainBUS_CLK_FULL;
 }
 /*-----------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
